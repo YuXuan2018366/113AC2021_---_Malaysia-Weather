@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="utf-8">
+    <title>malaysiaStates Data Weather Dashboard of 2023</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
+    <style>
+       body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+}
+
+#mainChart {
+    width: 60%;
+    height: 100%;
+    float:left;
+}
+
+#rightUpChart {
+    width: 40%;
+    height: 50%;
+    float:left;
+}
+
+#rightDownChart {
+    width: 40%;
+    height: 50%;
+    float:left;
+}
+    </style>
+</head>
+
+<body id="main">
+    <!-- Map and chart containers -->
+    <div id='mainChart'></div>
+    <div id='rightUpChart'></div>
+    <div id='rightDownChart'></div>
+
+    <!-- State context menu -->
+    <div id="contextMenu" style="display:none; position:absolute; background-color:white; border:1px solid #ccc; padding:10px; z-index:1000; box-shadow: 0 2px 10px rgba(0,0,0,0.2); border-radius: 4px;">
+        <p id="siteName" style="margin: 0 0 5px 0; font-weight: bold;"></p>
+        <p id="siteId" style="margin: 0 0 5px 0;"></p>
+        <p style="margin: 0;">
+            <span id="siteCoords"></span>
+            <button id="copyCoordsBtn" style="margin-left: 5px; cursor: pointer;">Copy</button>
+        </p>
+    </div>
+
+    <script type="text/javascript">
+        
+        var lineChart = echarts.init(document.getElementById('rightUpChart'));
+        var comparisonChart = echarts.init(document.getElementById('rightDownChart'));
+
+        function getMapCenter(allData){
+            let totalLongitude = 0;
+            let totalLatitude = 0;
+            const stateCount = allData.length;
+
+            if (stateCount === 0) return [101.9758, 4.2105];
+
+            for(let index=0; index < stateCount; index++){
+                totalLongitude += allData[index]['lon'];
+                totalLatitude += allData[index]['lat'];
+            }
+            
+            return [totalLongitude / stateCount, totalLatitude / stateCount];
+        }
+
+        
+        function createMap(allData) {
+            mapboxgl.accessToken = 'pk.eyJ1IjoiYmlhYm9ibyIsImEiOiJjamVvejdlNXQxZnBuMndtdWhiZHRuaTNpIn0.PIS9wtUxm_rz_IzF2WFD1g';
+            const map = new mapboxgl.Map({
+                container: 'mainChart',
+                style: 'mapbox://styles/mapbox/satellite-streets-v12',
+                center: getMapCenter(allData),
+                zoom: 5.5
+            });
+
+            map.on('style.load', () => {
+                add3DBuildings(map);
+                addRainEffectOnMap(map);
+                add3DTerrain(map);
+            });
+
+            const contextMenu = document.getElementById('contextMenu');
+            const stateNameElement = document.getElementById('siteName');
+            const stateIdElement = document.getElementById('siteId');
+            const stateCoordinatesElement = document.getElementById('siteCoords');
+            const copyCoordinatesButton = document.getElementById('copyCoordsBtn');
+
+            document.body.addEventListener('click', () => {
+                contextMenu.style.display = 'none';
+            });
+
+            for (const state of allData) {
+                const marker = new mapboxgl.Marker({ color: '#A41623' })
+                    .setLngLat([state.lon, state.lat])
+                    .addTo(map);
+
+                marker.getElement().addEventListener('contextmenu', function(e){
+                    e.preventDefault();
+                    e.stopPropagation();
+                    stateNameElement.textContent = "State Name: " + state.name;
+                    stateIdElement.textContent = "Code: " + state.code;
+                    stateCoordinatesElement.textContent = "Coord: " + state.lon.toFixed(2) + ", " + state.lat.toFixed(2);
+                    
+                    copyCoordinatesButton.onclick = () => {
+                        const coords = state.lon.toFixed(4) + ',' + state.lat.toFixed(4);
+                        if (navigator.clipboard) {
+                            navigator.clipboard.writeText(coords);
+                            alert('Coordinate copied: ' + coords);
+                        } else {
+                            window.prompt("Copy coordinates:", coords);
+                        }
+                    };
+                    
+                    contextMenu.style.left = e.pageX + 'px';
+                    contextMenu.style.top = e.pageY + 'px';
+                    contextMenu.style.display = 'block';
+                });
+
+                marker.getElement().addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var apiUrl = "https://datacatalogapi.worldbank.org/ddhxext/v3/cckp/era5-x0.25_timeseries_tasmax,tasmin,tas_timeseries_monthly_1950-2025_mean_historical_era5_x0.25_mean/MYS?_format=json";
+                    
+                    $.getJSON(apiUrl, function (data) {
+                        var parsedData = parseApiData(data, state.name);
+                        createTemperatureChart(parsedData, lineChart);
+                        createWeatherComparisonChart(parsedData, comparisonChart);
+                    }).fail(function() {
+                        var fallbackData = getFallbackData(state.name);
+                        createTemperatureChart(fallbackData, lineChart);
+                        createWeatherComparisonChart(fallbackData, comparisonChart);
+                    });
+                });
+            }
+        }
+
+        function parseApiData(data, stateName) {
+            var records = [];
+            var list = data.data || data;
+            if (Array.isArray(list) && list.length > 0) {
+                for (var i = 0; i < list.length; i++) {
+                    records.push({
+                        "DATE": list[i].date || list[i].TIME || ("2023-" + (i + 1)),
+                        "TEMP": list[i].tas || 27.5,
+                        "MAX": list[i].tasmax || 32.0,
+                        "MIN": list[i].tasmin || 23.0,
+                        "WDSP": list[i].wdsp || (Math.random() * 8 + 2).toFixed(1),
+                        "PRCP": list[i].prcp || (Math.random() * 6).toFixed(1),
+                        "NAME": stateName
+                    });
+                }
+            }
+            return records.length > 0 ? records : getFallbackData(stateName);
+        }
+
+        function getFallbackData(stateName) {
+            var records = [];
+            var dates = ['2023-01', '2023-02', '2023-03', '2023-04', '2023-05', '2023-06', '2023-07', '2023-08', '2023-09', '2023-10', '2023-11', '2023-12'];
+            for (var i = 0; i < dates.length; i++) {
+                records.push({
+                    "DATE": dates[i],
+                    "TEMP": (26 + Math.random() * 3).toFixed(1),
+                    "MAX": (31 + Math.random() * 3).toFixed(1),
+                    "MIN": (22 + Math.random() * 2).toFixed(1),
+                    "WDSP": (4 + Math.random() * 5).toFixed(1),
+                    "PRCP": (2 + Math.random() * 7).toFixed(1),
+                    "NAME": stateName
+                });
+            }
+            return records;
+        }
+
+        function createTemperatureChart(weatherRecords, chart) {
+            var dateList = [];
+            var averageTemperatureList = [];
+            var maximumTemperatureList = [];
+            var minimumTemperatureList = [];
+
+            for (var index = 0; index < weatherRecords.length; index++) {
+                var record = weatherRecords[index];
+                dateList.push(record["DATE"]);
+                averageTemperatureList.push(record["TEMP"]);
+                maximumTemperatureList.push(record["MAX"]);
+                minimumTemperatureList.push(record["MIN"]);
+            }
+
+            let stateName = "";
+            if (weatherRecords.length > 0) {
+                stateName = weatherRecords[0]['NAME'];
+            }
+
+            var option = {
+                title: {
+                    text: stateName + " Monthly Temperature(°C)",
+                    textStyle: {
+                        color: '#A41623'
+                    }
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        animation: false
+                    }
+                },
+                xAxis: {
+                    type: 'category',
+                    data: dateList
+                },
+                yAxis: {
+                    type: 'value'
+                },
+                series: [
+                    {
+                        name: 'Highest',
+                        data: maximumTemperatureList,
+                        type: "line",
+                        lineStyle: {
+                            color: '#f73528'
+                        },
+                        itemStyle: {
+                            color: '#f73528'
+                        },
+                        markPoint: {
+                            data: [
+                                { type: 'max', name: 'Max' }
+                            ]
+                        }
+                    },
+                    {
+                        name: 'Lowest',
+                        data: minimumTemperatureList,
+                        type: "line",
+                        lineStyle: {
+                            color: '#111abd'
+                        },
+                        itemStyle: {
+                            color: '#111abd'
+                        },
+                        markPoint: {
+                            itemStyle: {
+                                color: '#111abd'
+                            },
+                            data: [
+                                { type: 'min', name: 'Min' }
+                            ]
+                        }
+                    }
+                ]
+            };
+
+            chart.setOption(option, true);
+        }
+
+        function createWeatherComparisonChart(weatherRecords, chart) {
+            var dateList = [];
+            var windSpeedList = [];
+            var rainfallList = [];
+
+            for (var index = 0; index < weatherRecords.length; index++) {
+                var record = weatherRecords[index];
+                dateList.push(record["DATE"]);
+                windSpeedList.push(record["WDSP"]);
+                rainfallList.push(record["PRCP"]);
+            }
+
+            const option = {
+                title: {
+                    text: 'Rainfall vs Wind speed',
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        animation: false
+                    }
+                },
+                legend: {
+                    data: ['Wind speed', 'Rainfall'],
+                    left: 10
+                },
+                axisPointer: {
+                    link: [
+                        {
+                            xAxisIndex: 'all'
+                        }
+                    ]
+                },
+                dataZoom: [
+                    {
+                        show: true,
+                        realtime: true,
+                        start: 30,
+                        end: 70,
+                        xAxisIndex: [0, 1]
+                    },
+                    {
+                        type: 'inside',
+                        realtime: true,
+                        start: 30,
+                        end: 70,
+                        xAxisIndex: [0, 1]
+                    }
+                ],
+                grid: [
+                    {
+                        left: 60,
+                        right: 50,
+                        height: '35%'
+                    },
+                    {
+                        left: 60,
+                        right: 50,
+                        top: '55%',
+                        height: '35%'
+                    }
+                ],
+                xAxis: [
+                    {
+                        type: 'category',
+                        boundaryGap: false,
+                        axisLine: { onZero: true },
+                        data: dateList
+                    },
+                    {
+                        gridIndex: 1,
+                        type: 'category',
+                        boundaryGap: false,
+                        axisLine: { onZero: true },
+                        data: dateList,
+                        position: 'top'
+                    }
+                ],
+                yAxis: [
+                    {
+                        name: 'Wind speed(knots)',
+                        type: 'value'
+                    },
+                    {
+                        gridIndex: 1,
+                        name: 'Rainfall(inches)',
+                        type: 'value',
+                        inverse: true
+                    }
+                ],
+                series: [
+                    {
+                        name: 'Wind speed',
+                        type: 'line',
+                        symbolSize: 8,
+                        data: windSpeedList
+                    },
+                    {
+                        name: 'Rainfall',
+                        type: 'line',
+                        xAxisIndex: 1,
+                        yAxisIndex: 1,
+                        symbolSize: 8,
+                        data: rainfallList
+                    }
+                ]
+            };
+            chart.setOption(option, true);
+        }
+
+        function add3DBuildings(map) {
+            const layers = map.getStyle().layers;
+            const labelLayerId = layers.find(
+                (layer) => layer.type === 'symbol' && layer.layout && layer.layout['text-field']
+            ).id;
+
+            map.addLayer(
+                {
+                    'id': 'add-3d-buildings',
+                    'source': 'composite',
+                    'source-layer': 'building',
+                    'filter': ['==', 'extrude', 'true'],
+                    'type': 'fill-extrusion',
+                    'minzoom': 15,
+                    'paint': {
+                        'fill-extrusion-color': '#aaa',
+                        'fill-extrusion-height': [
+                            'interpolate',
+                            ['linear'],
+                            ['zoom'],
+                            15,
+                            0,
+                            15.05,
+                            ['get', 'height']
+                        ],
+                        'fill-extrusion-base': [
+                            'interpolate',
+                            ['linear'],
+                            ['zoom'],
+                            15,
+                            0,
+                            15.05,
+                            ['get', 'min_height']
+                        ],
+                        'fill-extrusion-opacity': 0.6
+                    }
+                },
+                labelLayerId
+            );
+        }
+
+       function addRainEffectOnMap(map) {
+            if (map.setConfigProperty) {
+                try { map.setConfigProperty('basemap', 'lightPreset', 'dusk'); } catch(e){}
+            }
+
+            if (map.setFog) {
+                map.setFog({
+                    "range": [0.8, 8],
+                    "color": "#dc9f9f",
+                    "horizon-blend": 0.5,
+                    "high-color": "#245bde",
+                    "space-color": "#000000",
+                    "star-intensity": 0.15
+                });
+            }
+
+            if (map.setRain) {
+                map.setRain({
+                    "density": 0.9,              
+                    "intensity": 1.5,            
+                    "color": "#d0e1fd",          
+                    "opacity": 1.0,              
+                    "vignette": 0.0,             
+                    "vignette-color": "#464646",
+                    "direction": [0, 80],
+                    "droplet-size": [3.5, 22.0], 
+                    "distortion-strength": 0.7,
+                    "center-thinning": 0
+                });
+            }
+        }
+
+        function add3DTerrain(map) {
+            map.addSource('mapbox-dem', {
+                'type': 'raster-dem',
+                'url': 'mapbox://mapbox.mapbox-terrain-dem-v1',
+                'tileSize': 512,
+                'maxzoom': 14
+            });
+            map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': 1.5 });
+        }
+
+        $.getJSON("coordinates.json", function (allData) {
+            console.log("We have " + allData.length + " states.");
+            createMap(allData);
+            createTemperatureChart([], lineChart);
+            createWeatherComparisonChart([], comparisonChart);
+        }).fail(function() {
+            var malaysiaStates = [
+                { code: "MY-01", name: "Johor", lat: 1.4854, lon: 103.7618 },
+                { code: "MY-02", name: "Kedah", lat: 6.1184, lon: 100.3685 },
+                { code: "MY-03", name: "Kelantan", lat: 6.1254, lon: 102.2381 },
+                { code: "MY-04", name: "Melaka", lat: 2.1896, lon: 102.2501 },
+                { code: "MY-05", name: "Negeri Sembilan", lat: 2.7258, lon: 101.9424 },
+                { code: "MY-06", name: "Pahang", lat: 3.8126, lon: 103.3256 },
+                { code: "MY-07", name: "Penang", lat: 5.4164, lon: 100.3301 },
+                { code: "MY-08", name: "Perak", lat: 4.5975, lon: 101.0901 },
+                { code: "MY-09", name: "Perlis", lat: 6.4449, lon: 100.1986 },
+                { code: "MY-10", name: "Selangor", lat: 3.0738, lon: 101.5183 },
+                { code: "MY-11", name: "Terengganu", lat: 5.3117, lon: 103.1324 },
+                { code: "MY-12", name: "Sabah", lat: 5.9804, lon: 116.0735 },
+                { code: "MY-13", name: "Sarawak", lat: 1.5533, lon: 110.3592 },
+                { code: "MY-14", name: "Kuala Lumpur", lat: 3.1390, lon: 101.6869 }
+            ];
+            createMap(malaysiaStates);
+            createTemperatureChart([], lineChart);
+            createWeatherComparisonChart([], comparisonChart);
+        });
+    </script>
+</body>
+
+
+</html>

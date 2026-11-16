@@ -1,0 +1,23 @@
+body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+}
+
+#mainChart {
+    width: 60%;
+    height: 100%;
+    float:left;
+}
+
+#rightUpChart {
+    width: 40%;
+    height: 50%;
+    float:left;
+}
+
+#rightDownChart {
+    width: 40%;
+    height: 50%;
+    float:left;
+}

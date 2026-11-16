@@ -1,0 +1,86 @@
+[
+    {
+        "code": "MY-01",
+        "name": "Johor",
+        "lat": 1.4854,
+        "lon": 103.7618
+    },
+    {
+        "code": "MY-02",
+        "name": "Kedah",
+        "lat": 6.1184,
+        "lon": 100.3685
+    },
+    {
+        "code": "MY-03",
+        "name": "Kelantan",
+        "lat": 6.1254,
+        "lon": 102.2381
+    },
+    {
+        "code": "MY-04",
+        "name": "Melaka",
+        "lat": 2.1896,
+        "lon": 102.2501
+    },
+    {
+        "code": "MY-05",
+        "name": "Negeri Sembilan",
+        "lat": 2.7258,
+        "lon": 101.9424
+    },
+    {
+        "code": "MY-06",
+        "name": "Pahang",
+        "lat": 3.8126,
+        "lon": 103.3256
+    },
+    {
+        "code": "MY-07",
+        "name": "Penang",
+        "lat": 5.4164,
+        "lon": 100.3301
+    },
+    {
+        "code": "MY-08",
+        "name": "Perak",
+        "lat": 4.5975,
+        "lon": 101.0901
+    },
+    {
+        "code": "MY-09",
+        "name": "Perlis",
+        "lat": 6.4449,
+        "lon": 100.1986
+    },
+    {
+        "code": "MY-10",
+        "name": "Selangor",
+        "lat": 3.0738,
+        "lon": 101.5183
+    },
+    {
+        "code": "MY-11",
+        "name": "Terengganu",
+        "lat": 5.3117,
+        "lon": 103.1324
+    },
+    {
+        "code": "MY-12",
+        "name": "Sabah",
+        "lat": 5.9804,
+        "lon": 116.0735
+    },
+    {
+        "code": "MY-13",
+        "name": "Sarawak",
+        "lat": 1.5533,
+        "lon": 110.3592
+    },
+    {
+        "code": "MY-14",
+        "name": "Kuala Lumpur",
+        "lat": 3.139,
+        "lon": 101.6869
+    }
+]
